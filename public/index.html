@@ -109,25 +109,50 @@
             }
         }
 
-        .status-badge {
+        .config-btn {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            padding: 0.4rem 0.75rem;
-            background: #22d3ee15;
-            border: 1px solid #22d3ee30;
+            padding: 0.5rem 1rem;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
             border-radius: 999px;
-            font-size: 0.75rem;
-            color: var(--accent);
-            margin-top: 0.75rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: all 0.2s;
         }
 
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            background: var(--accent);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
+        .config-btn:hover {
+            border-color: var(--accent);
+            color: var(--text);
+        }
+
+        .config-btn:active {
+            transform: scale(0.98);
+        }
+
+        .config-btn.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .config-btn.connected {
+            background: #22d3ee15;
+            border-color: #22d3ee50;
+            color: var(--accent);
+            pointer-events: none;
+        }
+
+        .config-btn .config-icon {
+            font-size: 0.9rem;
+        }
+
+        .config-btn.connected .config-icon {
+            animation: none;
         }
 
         @keyframes pulse {
@@ -150,6 +175,71 @@
             }
         }
 
+        .card-primary {
+            border-color: var(--accent);
+            border-width: 1px;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .card-collapsible {
+            padding: 0;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        @media (min-width: 640px) {
+            .card-header {
+                padding: 1.25rem 1.5rem;
+            }
+        }
+
+        .card-header:hover {
+            background: var(--bg-elevated);
+        }
+
+        .card-header:active {
+            background: var(--bg-base);
+        }
+
+        .collapse-icon {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: transform 0.3s;
+        }
+
+        .collapse-icon.expanded {
+            transform: rotate(180deg);
+        }
+
+        .card-body {
+            padding: 0 1.25rem 1.25rem;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s;
+            max-height: 1000px;
+            opacity: 1;
+        }
+
+        @media (min-width: 640px) {
+            .card-body {
+                padding: 0 1.5rem 1.5rem;
+            }
+        }
+
+        .card-body.collapsed {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+        }
+
         .card-title {
             display: flex;
             align-items: center;
@@ -157,22 +247,99 @@
             gap: 0.5rem;
             font-size: 0.95rem;
             font-weight: 600;
-            margin-bottom: 1rem;
-            padding-bottom: 0.875rem;
-            border-bottom: 1px solid var(--border);
+            margin: 0;
         }
 
         @media (min-width: 640px) {
             .card-title {
                 font-size: 1rem;
                 gap: 0.75rem;
-                margin-bottom: 1.25rem;
-                padding-bottom: 1rem;
             }
         }
 
         .card-title .icon {
             font-size: 1.1rem;
+        }
+
+        .tool-section {
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tool-section:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .tool-section:first-child {
+            padding-top: 0.5rem;
+        }
+
+        .tool-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .tool-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tool-row input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+        }
+
+        .tool-row .btn {
+            width: auto;
+            padding: 0.75rem 1.25rem;
+            white-space: nowrap;
+        }
+
+        .search-box {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        @media (min-width: 480px) {
+            .search-box {
+                flex-direction: row;
+            }
+        }
+
+        .search-box input {
+            flex: 1;
+        }
+
+        .btn-search {
+            min-width: 100px;
+        }
+
+        @media (min-width: 480px) {
+            .btn-search {
+                width: auto;
+            }
+        }
+
+        .btn-secondary {
+            background: var(--bg-elevated);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--text-muted);
+            background: var(--border);
+        }
+
+        .btn-full {
+            width: 100%;
         }
 
         .badge {
@@ -208,7 +375,7 @@
             width: 100%;
             padding: 0.875rem 1rem;
             font-family: 'IBM Plex Mono', monospace;
-            font-size: 16px; /* Prevents iOS zoom */
+            font-size: 16px;
             background: var(--bg-base);
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -480,7 +647,6 @@
             text-decoration: underline;
         }
 
-        /* iOS safe areas */
         @supports (padding: max(0px)) {
             .container {
                 padding-left: max(1rem, env(safe-area-inset-left));
@@ -488,7 +654,6 @@
             }
         }
 
-        /* Hide scrollbar but keep functionality */
         .output::-webkit-scrollbar {
             width: 4px;
         }
@@ -510,89 +675,78 @@
         <header>
             <div class="logo">Kaller</div>
             <p class="tagline">Kuwait Phone Directory Lookup</p>
-            <div class="status-badge">
-                <span class="status-dot"></span>
-                Server Running
-            </div>
+            <button class="config-btn" onclick="quickLoadConfig()" id="quickConfigBtn">
+                <span class="config-icon">⚡</span>
+                <span class="config-text">Connect to API</span>
+            </button>
         </header>
 
-        <!-- Config Card -->
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">⚙️</span>
-                Configuration
-                <span class="badge">FIREBASE</span>
-            </div>
-            <button class="btn btn-primary" onclick="loadConfig()" id="configBtn">
-                Load Config
-            </button>
-            <div class="config-grid" id="configOutput"></div>
-        </div>
-
-        <!-- Search Card -->
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">🔍</span>
-                Search
-                <span class="badge">ENCRYPTED</span>
-            </div>
-
+        <!-- Search Card (Primary) -->
+        <div class="card card-primary">
             <div class="tabs">
-                <button class="tab active" onclick="setSearchType('phone', this)">📱 Phone</button>
-                <button class="tab" onclick="setSearchType('name', this)">👤 Name</button>
+                <button class="tab active" onclick="setSearchType('phone', this)">🔍 Who's This Number?</button>
+                <button class="tab" onclick="setSearchType('name', this)">📱 Find Number</button>
             </div>
 
-            <div class="form-group">
-                <label>Search Term</label>
+            <div class="search-box">
                 <input type="text" id="searchTerm" placeholder="Enter phone number..." inputmode="tel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                <button class="btn btn-primary btn-search" onclick="performSearch()" id="searchBtn">
+                    <span class="btn-text">Search</span>
+                </button>
             </div>
-
-            <button class="btn btn-primary" onclick="performSearch()" id="searchBtn">
-                Search
-            </button>
 
             <div class="output" id="searchOutput"></div>
             <div class="results" id="searchResults"></div>
         </div>
 
-        <!-- Verify Card -->
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">📱</span>
-                Verification
-                <span class="badge">SMS</span>
+        <!-- Advanced Section -->
+        <div class="card card-collapsible">
+            <div class="card-header" onclick="toggleSection('advanced')">
+                <div class="card-title">
+                    <span class="icon">🛠️</span>
+                    Advanced Tools
+                </div>
+                <span class="collapse-icon" id="advancedIcon">▼</span>
             </div>
+            <div class="card-body collapsed" id="advancedBody">
+                <!-- Verify -->
+                <div class="tool-section">
+                    <div class="tool-header">
+                        <span>📱 SMS Verification</span>
+                        <span class="badge">SMS</span>
+                    </div>
+                    <div class="tool-row">
+                        <input type="text" id="verifyPhone" placeholder="Phone number..." inputmode="tel" autocomplete="off">
+                        <button class="btn btn-secondary" onclick="sendVerification()">Send</button>
+                    </div>
+                    <div class="output" id="verifyOutput"></div>
+                </div>
 
-            <div class="form-group">
-                <label>Phone Number</label>
-                <input type="text" id="verifyPhone" placeholder="Enter phone number..." inputmode="tel" autocomplete="off">
+                <!-- Block -->
+                <div class="tool-section">
+                    <div class="tool-header">
+                        <span>🚫 Block Request</span>
+                        <span class="badge">FREE</span>
+                    </div>
+                    <div class="tool-row">
+                        <input type="text" id="blockPhone" placeholder="Phone to block..." inputmode="tel" autocomplete="off">
+                        <button class="btn btn-secondary" onclick="requestBlock()">Block</button>
+                    </div>
+                    <div class="output" id="blockOutput"></div>
+                </div>
+
+                <!-- Config -->
+                <div class="tool-section">
+                    <div class="tool-header">
+                        <span>⚙️ Configuration</span>
+                        <span class="badge">FIREBASE</span>
+                    </div>
+                    <button class="btn btn-secondary btn-full" onclick="loadConfig()" id="configBtn">
+                        Load Config
+                    </button>
+                    <div class="config-grid" id="configOutput"></div>
+                </div>
             </div>
-
-            <button class="btn btn-primary" onclick="sendVerification()">
-                Send SMS
-            </button>
-
-            <div class="output" id="verifyOutput"></div>
-        </div>
-
-        <!-- Block Card -->
-        <div class="card">
-            <div class="card-title">
-                <span class="icon">🚫</span>
-                Block Request
-                <span class="badge">FREE</span>
-            </div>
-
-            <div class="form-group">
-                <label>Phone Number</label>
-                <input type="text" id="blockPhone" placeholder="Enter phone number to block..." inputmode="tel" autocomplete="off">
-            </div>
-
-            <button class="btn btn-primary" onclick="requestBlock()">
-                Request Block
-            </button>
-
-            <div class="output" id="blockOutput"></div>
         </div>
 
         <footer>
@@ -610,11 +764,41 @@
 
             const input = document.getElementById('searchTerm');
             if (type === 'name') {
-                input.placeholder = 'Enter name...';
+                input.placeholder = 'Enter name to find number...';
                 input.inputMode = 'text';
             } else {
                 input.placeholder = 'Enter phone number...';
                 input.inputMode = 'tel';
+            }
+        }
+
+        function toggleSection(section) {
+            const body = document.getElementById(section + 'Body');
+            const icon = document.getElementById(section + 'Icon');
+
+            body.classList.toggle('collapsed');
+            icon.classList.toggle('expanded');
+        }
+
+        let configLoaded = false;
+
+        async function quickLoadConfig() {
+            const btn = document.getElementById('quickConfigBtn');
+            btn.classList.add('loading');
+            btn.innerHTML = '<span class="config-icon">⏳</span><span class="config-text">Connecting...</span>';
+
+            try {
+                const res = await fetch('/api/config');
+                if (!res.ok) throw new Error('Failed to connect');
+                await res.json();
+
+                configLoaded = true;
+                btn.classList.remove('loading');
+                btn.classList.add('connected');
+                btn.innerHTML = '<span class="config-icon">✓</span><span class="config-text">Connected</span>';
+            } catch (e) {
+                btn.classList.remove('loading');
+                btn.innerHTML = '<span class="config-icon">⚠️</span><span class="config-text">Retry Connection</span>';
             }
         }
 
@@ -639,6 +823,14 @@
                     </div>`;
                 }).join('');
                 output.classList.add('visible');
+
+                // Also update quick button
+                if (!configLoaded) {
+                    configLoaded = true;
+                    const quickBtn = document.getElementById('quickConfigBtn');
+                    quickBtn.classList.add('connected');
+                    quickBtn.innerHTML = '<span class="config-icon">✓</span><span class="config-text">Connected</span>';
+                }
             } catch (e) {
                 alert('Error: ' + e.message);
             }
@@ -730,7 +922,6 @@
             }
         }
 
-        // Handle Enter key on inputs
         document.getElementById('searchTerm').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') performSearch();
         });
@@ -743,8 +934,7 @@
             if (e.key === 'Enter') requestBlock();
         });
 
-        // Auto-load config
-        loadConfig();
+        document.getElementById('searchTerm').focus();
     </script>
 </body>
 </html>

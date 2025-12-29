@@ -30,10 +30,11 @@ export async function search(
 ): Promise<SearchResult[]> {
   const config = await getConfig();
   const searchTypeCode = type === "name" ? 1 : 2;
+  const endpoint = type === "name" ? "getNumbersEncMotasel.php" : "getNamesEnc02Motasel.php";
 
   const encryptedCode = encryptSearchParams(term, searchTypeCode);
 
-  const url = `${config.base}/getNamesEnc02Motasel.php?code=${encryptedCode}`;
+  const url = `${config.base}/${endpoint}?code=${encryptedCode}`;
 
   const response = await fetch(url, {
     headers: { "User-Agent": CONFIG.USER_AGENT },

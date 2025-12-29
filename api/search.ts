@@ -60,10 +60,11 @@ export default async function handler(req: Request) {
   try {
     const cfg = await getConfig();
     const searchType = type === 'name' ? 1 : 2;
+    const endpoint = type === 'name' ? 'getNumbersEncMotasel.php' : 'getNamesEnc02Motasel.php';
     const plaintext = `123term=${term}&234opt=${searchType}&234limit=100&234slt=123`;
     const encryptedCode = encrypt(plaintext);
 
-    const response = await fetch(`${cfg.base}/getNamesEnc02Motasel.php?code=${encryptedCode}`, {
+    const response = await fetch(`${cfg.base}/${endpoint}?code=${encryptedCode}`, {
       headers: { "User-Agent": USER_AGENT },
     });
 
