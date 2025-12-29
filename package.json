@@ -1,0 +1,30 @@
+{
+  "name": "kaller",
+  "version": "1.0.0",
+  "description": "API client for Kuwait phone directory lookup",
+  "author": "Meshal",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --watch run src/server.ts",
+    "cli": "bun run src/cli.ts",
+    "search": "bun run src/cli.ts search",
+    "config": "bun run src/cli.ts config"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "bun-types": "latest"
+  },
+  "keywords": [
+    "kaller",
+    "kuwait",
+    "phone",
+    "directory",
+    "api",
+    "caller-id"
+  ]
+}
