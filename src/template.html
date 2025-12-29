@@ -686,8 +686,8 @@
         <!-- Search Card (Primary) -->
         <div class="card card-primary">
             <div class="tabs">
-                <button class="tab active" onclick="setSearchType('phone', this)">🔍 Who's This Number?</button>
-                <button class="tab" onclick="setSearchType('name', this)">📱 Find Number</button>
+                <button class="tab active" onclick="setSearchType('name', this)">🔍 Who's This Number?</button>
+                <button class="tab" onclick="setSearchType('phone', this)">📱 Find Number</button>
             </div>
 
             <div class="search-box">
@@ -757,7 +757,7 @@
     </div>
 
     <script>
-        let searchType = 'phone';
+        let searchType = 'name';
 
         function setSearchType(type, el) {
             searchType = type;
@@ -766,11 +766,13 @@
 
             const input = document.getElementById('searchTerm');
             if (type === 'name') {
-                input.placeholder = 'Enter name to find number...';
-                input.inputMode = 'text';
-            } else {
+                // "Who's This Number?" - enter phone, get names
                 input.placeholder = 'Enter phone number...';
                 input.inputMode = 'tel';
+            } else {
+                // "Find Number" - enter name, get numbers
+                input.placeholder = 'Enter name to find number...';
+                input.inputMode = 'text';
             }
         }
 
