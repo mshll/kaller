@@ -8,6 +8,8 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://kaller.mshl.me'),
+  alternates: { canonical: '/' },
   title: 'Kaller',
   description: 'Kuwait Phone Directory Lookup',
   manifest: '/manifest.json',
