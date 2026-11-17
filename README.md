@@ -1,5 +1,13 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Search connection
+
+Search loads `configGoldNew.txt` from the `menodag-b32f3.appspot.com` Firebase Storage bucket and posts the version 55 form payload to the configured `/names` endpoint. It uses UTF-8 Base64 and string rotation, with JSON responses. Search requires no AES key or Firebase environment variable.
+
+The existing UI receives only name/phone records; upstream service messages and ads are excluded. Verification and blocking still use the legacy `FIREBASE_URL` configuration.
+
+Run the search route tests with `bun test app/api/search/route.test.ts`.
+
 ## Getting Started
 
 First, run the development server:

@@ -1,44 +1,55 @@
 import { NextRequest, NextResponse } from "next/server"
-import { encryptSearchParams, decrypt } from "@/lib/crypto"
-import { requireEnv, USER_AGENT, type SearchResult } from "@/lib/config"
+import { encodeSearchKeyword } from "@/lib/crypto"
+import { USER_AGENT } from "@/lib/config"
+import { getSearchConfig, parseSearchResults, UPSTREAM_TIMEOUT_MS } from "@/lib/menodag"
 
 export const runtime = "edge"
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
-  const term = searchParams.get("term")
+  const term = searchParams.get("term")?.trim()
   const type = searchParams.get("type") || "phone"
 
   if (!term) {
     return NextResponse.json({ error: "Missing term parameter" }, { status: 400 })
   }
+  if (type !== "phone" && type !== "name") {
+    return NextResponse.json({ error: "Invalid search type" }, { status: 400 })
+  }
 
   try {
-    const AES_KEY = requireEnv("AES_KEY")
-    const FIREBASE_URL = requireEnv("FIREBASE_URL")
+    const config = await getSearchConfig()
+    const response = await fetch(`${config.base}/names`, {
+      method: "POST",
+      headers: {
+        "User-Agent": USER_AGENT,
+        UserAgent: USER_AGENT,
+        Accept: USER_AGENT,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        keyword: encodeSearchKeyword(term),
+        type: type === "phone" ? "1" : "2",
+        code: "kw",
+        lang: "en",
+        showSpam: "0",
+        version: "29",
+      }),
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: `Search service returned ${response.status}` },
+        { status: response.status >= 400 ? response.status : 502 }
+      )
+    }
 
-    // Get config for API base URL
-    const configResponse = await fetch(`${FIREBASE_URL}/config.json`)
-    const config = await configResponse.json()
-
-    // Encrypt search params
-    // 'name' param = returns name (send phone number), 'phone' param = returns phone (send name)
-    const searchType = type === "phone" ? 1 : 2
-    const encryptedCode = encryptSearchParams(term, searchType as 1 | 2, AES_KEY)
-
-    // Call the API
-    const response = await fetch(
-      `${config.base}/getNamesEnc02Motasel.php?code=${encryptedCode}`,
-      { headers: { "User-Agent": USER_AGENT } }
-    )
-
-    const encryptedResponse = await response.text()
-    const decrypted = decrypt(encryptedResponse, AES_KEY)
-    const results: SearchResult[] = JSON.parse(decrypted)
-
-    return NextResponse.json(results)
+    const payload: unknown = await response.json()
+    return NextResponse.json(parseSearchResults(payload))
   } catch (error) {
     const message = error instanceof Error ? error.message : "Search failed"
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 502 })
   }
 }

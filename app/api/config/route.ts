@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server"
-import { requireEnv, type FirebaseConfig } from "@/lib/config"
+import { getSearchConfig } from "@/lib/menodag"
 
 export const runtime = "edge"
 
 export async function GET() {
   try {
-    const FIREBASE_URL = requireEnv("FIREBASE_URL")
-
-    const response = await fetch(`${FIREBASE_URL}/config.json`)
-    const config: FirebaseConfig = await response.json()
+    const config = await getSearchConfig()
 
     return NextResponse.json(config)
   } catch (error) {
