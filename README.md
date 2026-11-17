@@ -8,6 +8,8 @@ The existing UI receives only name/phone records; upstream service messages and 
 
 Run the search route tests with `bun test app/api/search/route.test.ts`.
 
+Type checking uses TypeScript 7 through the `@typescript/native` alias. The `typescript` alias supplies the TypeScript 6 API required by ESLint and other build tools.
+
 ## Getting Started
 
 First, run the development server:

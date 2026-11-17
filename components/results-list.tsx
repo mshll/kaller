@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { User, Phone, Copy, ChevronDown } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -42,12 +42,8 @@ export function ResultsList({
   isLoading,
   hasSearched,
 }: ResultsListProps) {
-  const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE)
-
-  // Reset display count when results change
-  useEffect(() => {
-    setDisplayCount(ITEMS_PER_PAGE)
-  }, [results])
+  const [pagination, setPagination] = useState({ results, count: ITEMS_PER_PAGE })
+  const displayCount = pagination.results === results ? pagination.count : ITEMS_PER_PAGE
 
   const displayedResults = results.slice(0, displayCount)
   const hasMore = displayCount < results.length
@@ -64,7 +60,7 @@ export function ResultsList({
   }
 
   const loadMore = () => {
-    setDisplayCount((prev) => prev + ITEMS_PER_PAGE)
+    setPagination({ results, count: displayCount + ITEMS_PER_PAGE })
   }
 
   if (isLoading) {
