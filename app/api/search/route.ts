@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { encodeSearchKeyword } from "@/lib/crypto"
 import { USER_AGENT } from "@/lib/config"
+import { getSearchToken } from "@/lib/directory-auth"
 import { getSearchConfig, parseSearchResults, UPSTREAM_TIMEOUT_MS } from "@/lib/menodag"
 
 export const runtime = "nodejs"
@@ -19,13 +20,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const config = await getSearchConfig()
-    const response = await fetch(`${config.base}/names`, {
+    const search = async (forceRefresh = false) => fetch(`${config.base}/search`, {
       method: "POST",
       headers: {
         "User-Agent": USER_AGENT,
         UserAgent: USER_AGENT,
         Accept: USER_AGENT,
         "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${await getSearchToken(forceRefresh)}`,
       },
       body: new URLSearchParams({
         keyword: encodeSearchKeyword(term),
@@ -39,6 +41,10 @@ export async function GET(request: NextRequest) {
       redirect: "manual",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     })
+    let response = await search()
+    if (response.status === 401) {
+      response = await search(true)
+    }
     if (!response.ok) {
       console.error("Directory service rejected search", {
         status: response.status,
