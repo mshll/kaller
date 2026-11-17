@@ -2,17 +2,18 @@
  * Frontend API client for Kaller
  */
 
-import type { SearchResult, FirebaseConfig } from "./config"
+import type { SearchResult, SearchType, FirebaseConfig } from "./config"
 
 /**
  * Search for phone numbers or names
  */
 export async function search(
   term: string,
-  type: "phone" | "name"
+  type: SearchType,
+  signal?: AbortSignal
 ): Promise<SearchResult[]> {
   const params = new URLSearchParams({ term, type })
-  const response = await fetch(`/api/search?${params}`)
+  const response = await fetch(`/api/search?${params}`, { signal })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Search failed" }))
