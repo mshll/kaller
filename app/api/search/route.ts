@@ -3,7 +3,7 @@ import { encodeSearchKeyword } from "@/lib/crypto"
 import { USER_AGENT } from "@/lib/config"
 import { getSearchConfig, parseSearchResults, UPSTREAM_TIMEOUT_MS } from "@/lib/menodag"
 
-export const runtime = "edge"
+export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
