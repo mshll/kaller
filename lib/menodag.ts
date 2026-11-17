@@ -6,7 +6,7 @@ export const UPSTREAM_TIMEOUT_MS = 8000
 export async function getSearchConfig(): Promise<FirebaseConfig> {
   const response = await fetch(CONFIG_URL, {
     cache: "no-store",
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   })
   if (!response.ok) {

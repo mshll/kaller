@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         version: "29",
       }),
       cache: "no-store",
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     })
     if (!response.ok) {

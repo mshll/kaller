@@ -43,7 +43,8 @@ test("phone lookup posts v55 fields and returns only contact rows", async () => 
   assert.match(calls[0].url, /firebasestorage\.googleapis\.com\/v0\/b\/menodag-b32f3\.appspot\.com\/o\/configGoldNew\.txt\?alt=media$/)
   assert.equal(calls[1].url, `${base}/names`)
   assert.equal(calls[1].init?.method, "POST")
-  assert.equal(calls[1].init?.redirect, "error")
+  assert.equal(calls[0].init?.redirect, "manual")
+  assert.equal(calls[1].init?.redirect, "manual")
   assert.equal(calls[1].init?.cache, "no-store")
   const headers = new Headers(calls[1].init?.headers)
   assert.equal(headers.get("Content-Type"), "application/x-www-form-urlencoded")
@@ -108,6 +109,25 @@ test("upstream access and rate-limit failures remain errors", async () => {
     assert.equal(response.status, status)
     assert.deepEqual(await response.json(), { error: `Search service returned ${status}` })
   }
+})
+
+test("search redirects are rejected instead of forwarded", async () => {
+  mockUpstream({ results: [] }, 302)
+  const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+  assert.equal(response.status, 502)
+  assert.deepEqual(await response.json(), { error: "Search service returned 302" })
+})
+
+test("configuration redirects stop before the search request", async () => {
+  let calls = 0
+  globalThis.fetch = async (_input, init) => {
+    calls++
+    assert.equal(init?.redirect, "manual")
+    return new Response(null, { status: 302, headers: { Location: "https://example.com" } })
+  }
+  const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+  assert.equal(response.status, 502)
+  assert.equal(calls, 1)
 })
 
 test("invalid success payloads do not become empty search results", async () => {
