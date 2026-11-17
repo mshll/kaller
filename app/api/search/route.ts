@@ -40,6 +40,12 @@ export async function GET(request: NextRequest) {
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     })
     if (!response.ok) {
+      console.error("Directory service rejected search", {
+        status: response.status,
+        errorType: response.headers.get("x-amzn-ErrorType"),
+        requestId: response.headers.get("x-amzn-RequestId"),
+        detail: (await response.text()).slice(0, 512),
+      })
       return NextResponse.json(
         { error: `Search service returned ${response.status}` },
         { status: response.status >= 400 ? response.status : 502 }
