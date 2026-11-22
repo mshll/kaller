@@ -41,6 +41,9 @@ function firebaseResponse(url: string): Response | undefined {
 function mockUpstream(payload: unknown, status = 200) {
   const calls: { url: string; init: RequestInit | undefined }[] = []
   testFetch = async (input, init) => {
+    if (String(input).endsWith("/integrity-mode")) {
+      return Response.json({ schemaVersion: 1, integrityEnabled: false })
+    }
     const auth = firebaseResponse(String(input))
     if (auth) return auth
     calls.push({ url: String(input), init })
@@ -127,6 +130,7 @@ test("concurrent searches reuse one anonymous sign-in", async () => {
   let searches = 0
   testFetch = async (input) => {
     const url = String(input)
+    if (url.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: false })
     if (url.includes("accounts:signUp")) signIns++
     const auth = firebaseResponse(url)
     if (auth) return auth
@@ -152,6 +156,7 @@ test("a 401 refreshes the Firebase token and retries search only once", async ()
     let refreshes = 0
     testFetch = async (input, init) => {
       const url = String(input)
+      if (url.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: false })
       const auth = firebaseResponse(url)
       if (auth) return auth
       if (url.startsWith("https://securetoken.googleapis.com/")) {
@@ -162,28 +167,129 @@ test("a 401 refreshes the Firebase token and retries search only once", async ()
         tokens.push(new Headers(init?.headers).get("Authorization"))
         return Response.json({ results: [] }, { status: tokens.length === 1 ? 401 : finalStatus })
       }
+      if (url.endsWith("/names")) {
+        assert.equal(new Headers(init?.headers).get("Authorization"), null)
+        return Response.json({ results: [] })
+      }
       return Response.json({ base })
     }
     const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
-    assert.equal(response.status, finalStatus, JSON.stringify(await response.clone().json()))
+    assert.equal(response.status, 200, JSON.stringify(await response.clone().json()))
     assert.deepEqual(tokens, ["Bearer test-id-token", "Bearer refreshed-id-token"])
     assert.equal(refreshes, 1)
   }
 })
 
-test("failed authentication stops before directory search", async () => {
+test("failed authentication uses the documented legacy route", async () => {
   let searches = 0
+  let legacy = 0
   testFetch = async (input) => {
     const url = String(input)
+    if (url.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: false })
     if (url.startsWith("https://identitytoolkit.googleapis.com/")) {
       return Response.json({ error: { message: "OPERATION_NOT_ALLOWED" } }, { status: 400 })
     }
     if (url.endsWith("/search")) searches++
+    if (url.endsWith("/names")) {
+      legacy++
+      return Response.json({ results: [] })
+    }
     return Response.json({ base })
   }
   const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
-  assert.equal(response.status, 502)
+  assert.equal(response.status, 200)
   assert.equal(searches, 0)
+  assert.equal(legacy, 1)
+})
+
+test("unavailable app verification selects legacy without minting identities", async () => {
+  for (const mode of [true, null]) {
+    const requests: string[] = []
+    testFetch = async (input, init) => {
+      const url = String(input)
+      requests.push(url)
+      if (url.endsWith("/integrity-mode")) {
+        return mode === null
+          ? Response.json({ error: "Unavailable" }, { status: 503 })
+          : Response.json({ schemaVersion: 1, integrityEnabled: mode })
+      }
+      if (url.endsWith("/names")) {
+        assert.equal(new Headers(init?.headers).get("Authorization"), null)
+        return Response.json({ results: [] })
+      }
+      assert.ok(url.startsWith("https://firebasestorage.googleapis.com/"))
+      return Response.json({ base })
+    }
+    const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+    assert.equal(response.status, 200)
+    assert.equal(requests.length, 3)
+    assert.ok(requests[2].endsWith("/names"))
+  }
+})
+
+test("a changed integrity mode is read again after a 401", async () => {
+  let modes = 0
+  const paths: string[] = []
+  testFetch = async (input) => {
+    const url = String(input)
+    const auth = firebaseResponse(url)
+    if (auth) return auth
+    if (url.endsWith("/integrity-mode")) {
+      modes++
+      return Response.json({ schemaVersion: 1, integrityEnabled: modes > 1 })
+    }
+    if (url.endsWith("/search") || url.endsWith("/names")) {
+      paths.push(new URL(url).pathname)
+      return Response.json({ results: [] }, { status: url.endsWith("/search") ? 401 : 200 })
+    }
+    return Response.json({ base })
+  }
+  const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+  assert.equal(response.status, 200)
+  assert.equal(modes, 2)
+  assert.deepEqual(paths, ["/stage/search", "/stage/names"])
+})
+
+test("a rejected legacy fallback stops after one attempt", async () => {
+  let legacy = 0
+  testFetch = async (input) => {
+    const url = String(input)
+    if (url.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: true })
+    if (url.endsWith("/names")) {
+      legacy++
+      return Response.json({ message: "Forbidden" }, { status: 403 })
+    }
+    return Response.json({ base })
+  }
+  const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+  assert.equal(response.status, 403)
+  assert.equal(legacy, 1)
+})
+
+test("a config outage uses the last validated base", async () => {
+  mockUpstream({ results: [] })
+  assert.equal((await getConfig()).status, 200)
+  for (const failure of ["network", "server"]) {
+    testFetch = async (input) => {
+      const url = String(input)
+      if (url.startsWith("https://firebasestorage.googleapis.com/")) {
+        if (failure === "network") throw new TypeError("Connection failed")
+        return Response.json({ error: "Unavailable" }, { status: 503 })
+      }
+      if (url.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: true })
+      assert.equal(url, `${base}/names`)
+      return Response.json({ results: [{ name: "Test business", phone: "00000000" }] })
+    }
+    const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), [{ name: "Test business", phone: "00000000" }])
+  }
+})
+
+test("config access denial does not use cached configuration", async () => {
+  testFetch = async () => Response.json({ error: "Forbidden" }, { status: 403 })
+  const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+  assert.equal(response.status, 502)
 })
 
 test("missing terms and unknown search types fail before fetching", async () => {
@@ -197,10 +303,11 @@ test("missing terms and unknown search types fail before fetching", async () => 
 
 test("upstream access and rate-limit failures remain errors", async () => {
   for (const status of [403, 429, 503]) {
-    mockUpstream({ message: "upstream error" }, status)
+    const calls = mockUpstream({ message: "upstream error" }, status)
     const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
     assert.equal(response.status, status)
     assert.deepEqual(await response.json(), { error: `Search service returned ${status}` })
+    assert.equal(calls.length, 2)
   }
 })
 

@@ -2,14 +2,22 @@ import type { FirebaseConfig, SearchResult } from "./config"
 
 const CONFIG_URL = "https://firebasestorage.googleapis.com/v0/b/menodag-b32f3.appspot.com/o/configGoldNew.txt?alt=media"
 export const UPSTREAM_TIMEOUT_MS = 8000
+let lastConfig: FirebaseConfig | undefined
 
-export async function getSearchConfig(): Promise<FirebaseConfig> {
-  const response = await fetch(CONFIG_URL, {
-    cache: "no-store",
-    redirect: "manual",
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  })
+export async function getSearchConfig(signal?: AbortSignal): Promise<FirebaseConfig> {
+  let response: Response
+  try {
+    response = await fetch(CONFIG_URL, {
+      cache: "no-store",
+      redirect: "manual",
+      signal: AbortSignal.any([AbortSignal.timeout(UPSTREAM_TIMEOUT_MS), ...(signal ? [signal] : [])]),
+    })
+  } catch (error) {
+    if (lastConfig && !signal?.aborted) return lastConfig
+    throw error
+  }
   if (!response.ok) {
+    if (response.status >= 500 && lastConfig) return lastConfig
     throw new Error("Failed to load search configuration")
   }
 
@@ -23,7 +31,30 @@ export async function getSearchConfig(): Promise<FirebaseConfig> {
     throw new Error("Invalid search service URL")
   }
 
-  return { ...config, base: base.toString().replace(/\/+$/, "") }
+  lastConfig = { ...config, base: base.toString().replace(/\/+$/, "") }
+  return lastConfig
+}
+
+/** Match the APK's mode selection; unavailable verification uses its legacy route. */
+export async function getSearchIntegrity(base: string, signal: AbortSignal): Promise<boolean | null> {
+  try {
+    const response = await fetch(`${base}/integrity-mode`, {
+      cache: "no-store",
+      redirect: "manual",
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.any([signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+    })
+    if (!response.ok) return null
+    const mode: unknown = await response.json()
+    if (mode && typeof mode === "object" && "schemaVersion" in mode && mode.schemaVersion === 1 &&
+      "integrityEnabled" in mode && typeof mode.integrityEnabled === "boolean") {
+      return mode.integrityEnabled
+    }
+    return null
+  } catch (error) {
+    if (signal.aborted) throw error
+    return null
+  }
 }
 
 export function parseSearchResults(payload: unknown): SearchResult[] {

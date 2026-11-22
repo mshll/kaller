@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { encodeSearchKeyword } from "@/lib/crypto"
 import { USER_AGENT } from "@/lib/config"
 import { getSearchToken } from "@/lib/directory-auth"
-import { getSearchConfig, parseSearchResults, UPSTREAM_TIMEOUT_MS } from "@/lib/menodag"
+import { getSearchConfig, getSearchIntegrity, parseSearchResults, UPSTREAM_TIMEOUT_MS } from "@/lib/menodag"
 
 export const runtime = "nodejs"
 
@@ -19,15 +19,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const config = await getSearchConfig()
-    const search = async (forceRefresh = false) => fetch(`${config.base}/search`, {
+    const signal = AbortSignal.timeout(30_000)
+    const config = await getSearchConfig(signal)
+    let integrity = await getSearchIntegrity(config.base, signal)
+    const search = async (path: "/search" | "/names", token?: string) => fetch(`${config.base}${path}`, {
       method: "POST",
       headers: {
         "User-Agent": USER_AGENT,
         UserAgent: USER_AGENT,
         Accept: USER_AGENT,
         "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Bearer ${await getSearchToken(forceRefresh)}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: new URLSearchParams({
         keyword: encodeSearchKeyword(term),
@@ -39,18 +41,41 @@ export async function GET(request: NextRequest) {
       }),
       cache: "no-store",
       redirect: "manual",
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
     })
-    let response = await search()
-    if (response.status === 401) {
-      response = await search(true)
+    let usedLegacy = false
+    const attempt = async (forceRefresh = false) => {
+      if (integrity === false) {
+        try {
+          const token = await getSearchToken(forceRefresh)
+          signal.throwIfAborted()
+          return await search("/search", token)
+        } catch (error) {
+          signal.throwIfAborted()
+          console.warn("Directory verification or connection unavailable", {
+            message: error instanceof Error ? error.message : "Unknown failure",
+          })
+        }
+      }
+      usedLegacy = true
+      return search("/names")
+    }
+    let response = await attempt()
+    if (response.status === 401 && !usedLegacy) {
+      integrity = await getSearchIntegrity(config.base, signal)
+      response = await attempt(true)
+    }
+    if (response.status === 401 && !usedLegacy && integrity === false) {
+      usedLegacy = true
+      response = await search("/names")
     }
     if (!response.ok) {
       console.error("Directory service rejected search", {
         status: response.status,
+        route: usedLegacy ? "/names" : "/search",
+        integrityEnabled: integrity,
         errorType: response.headers.get("x-amzn-ErrorType"),
         requestId: response.headers.get("x-amzn-RequestId"),
-        detail: (await response.text()).slice(0, 512),
       })
       return NextResponse.json(
         { error: `Search service returned ${response.status}` },
@@ -59,7 +84,11 @@ export async function GET(request: NextRequest) {
     }
 
     const payload: unknown = await response.json()
-    return NextResponse.json(parseSearchResults(payload))
+    const results = parseSearchResults(payload)
+    if (usedLegacy) {
+      console.info("Directory search used legacy route", { integrityEnabled: integrity })
+    }
+    return NextResponse.json(results)
   } catch (error) {
     const message = error instanceof Error ? error.message : "Search failed"
     return NextResponse.json({ error: message }, { status: 502 })

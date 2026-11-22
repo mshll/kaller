@@ -2,7 +2,11 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Search connection
 
-Search loads `configGoldNew.txt` from the `menodag-b32f3.appspot.com` Firebase Storage bucket and posts the version 55 form payload to the configured `/search` endpoint. The Firebase SDK signs in anonymously using the APK's public client API key, reuses the server session, and refreshes expiring tokens. A 401 triggers one forced token refresh and retry. Search uses UTF-8 Base64 and string rotation, with JSON responses. No AES key or Firebase environment variable is required.
+Search loads `configGoldNew.txt` from the `menodag-b32f3.appspot.com` Firebase Storage bucket. During network or server outages, it can reuse the last validated config in the current server instance.
+
+The upstream `/integrity-mode` selects the APK's search flow. When integrity is disabled, search uses Firebase anonymous authentication on `/search`. A 401 rechecks the mode and refreshes the token once. If verification is unavailable, or a refreshed token is still rejected with integrity disabled, search uses the APK's public `/names` route once. A 403 or 429 stops further attempts. Fetches share a 30-second deadline.
+
+Search uses UTF-8 Base64 and string rotation, with JSON responses. No AES key or Firebase environment variable is required.
 
 The existing UI receives only name/phone records; upstream service messages and ads are excluded. Verification and blocking still use the legacy `FIREBASE_URL` configuration.
 
