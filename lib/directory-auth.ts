@@ -8,9 +8,16 @@ const auth = getAuth(app)
 let signingIn: ReturnType<typeof signInAnonymously> | undefined
 
 /** Reuse the directory's anonymous session; the SDK refreshes expiring ID tokens. */
-export async function getSearchToken(forceRefresh = false): Promise<string> {
-  const user = auth.currentUser ?? (await (signingIn ??= signInAnonymously(auth).finally(() => {
-    signingIn = undefined
-  }))).user
-  return user.getIdToken(forceRefresh)
+export async function getSearchToken(forceRefresh: boolean, signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const cancel = () => reject(signal.reason)
+    signal.addEventListener("abort", cancel, { once: true })
+    const user = auth.currentUser ? Promise.resolve(auth.currentUser) :
+      (signingIn ??= signInAnonymously(auth).finally(() => {
+        signingIn = undefined
+      })).then((credential) => credential.user)
+    user.then((user) => user.getIdToken(forceRefresh)).then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", cancel))
+  })
 }

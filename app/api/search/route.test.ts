@@ -10,7 +10,8 @@ globalThis.fetch = (input, init) => testFetch(input, init)
 const { GET } = await import("./route")
 const { GET: getConfig } = await import("../config/route")
 const { getApp } = await import("firebase/app")
-const { getAuth, signOut } = await import("firebase/auth")
+const { getAuth, onIdTokenChanged, signOut } = await import("firebase/auth")
+const { getSearchToken } = await import("@/lib/directory-auth")
 const base = "https://example.execute-api.ca-central-1.amazonaws.com/stage"
 
 after(() => {
@@ -147,6 +148,32 @@ test("concurrent searches reuse one anonymous sign-in", async () => {
   assert.ok(responses.every((response) => response.status === 200))
   assert.equal(signIns, 1)
   assert.equal(searches, 2)
+})
+
+test("token refresh stops waiting when the request deadline expires", { timeout: 1000 }, async () => {
+  mockUpstream({ results: [] })
+  assert.equal((await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))).status, 200)
+  const started = Promise.withResolvers<void>()
+  const refreshed = Promise.withResolvers<Response>()
+  const updated = Promise.withResolvers<void>()
+  const unsubscribe = onIdTokenChanged(getAuth(getApp("menodag-search")), (user) => {
+    if (user) void user.getIdToken().then((token) => {
+      if (token === "refreshed-id-token") updated.resolve()
+    })
+  })
+  testFetch = async (input) => {
+    assert.ok(String(input).startsWith("https://securetoken.googleapis.com/"))
+    started.resolve()
+    return refreshed.promise
+  }
+  const controller = new AbortController()
+  const pending = getSearchToken(true, controller.signal)
+  await started.promise
+  controller.abort(new Error("Request deadline expired"))
+  await assert.rejects(pending, /Request deadline expired/)
+  refreshed.resolve(Response.json({ access_token: "refreshed-id-token", refresh_token: "new-refresh-token", expires_in: "3600" }))
+  await updated.promise
+  unsubscribe()
 })
 
 test("a 401 refreshes the Firebase token and retries search only once", async () => {

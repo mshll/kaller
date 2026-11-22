@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const attempt = async (forceRefresh = false) => {
       if (integrity === false) {
         try {
-          const token = await getSearchToken(forceRefresh)
+          const token = await getSearchToken(forceRefresh, AbortSignal.any([signal, AbortSignal.timeout(15_000)]))
           signal.throwIfAborted()
           return await search("/search", token)
         } catch (error) {

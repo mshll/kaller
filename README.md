@@ -4,7 +4,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 Search loads `configGoldNew.txt` from the `menodag-b32f3.appspot.com` Firebase Storage bucket. During network or server outages, it can reuse the last validated config in the current server instance.
 
-The upstream `/integrity-mode` selects the APK's search flow. When integrity is disabled, search uses Firebase anonymous authentication on `/search`. A 401 rechecks the mode and refreshes the token once. If verification is unavailable, or a refreshed token is still rejected with integrity disabled, search uses the APK's public `/names` route once. A 403 or 429 stops further attempts. Fetches share a 30-second deadline.
+The upstream `/integrity-mode` selects the APK's search flow. When integrity is disabled, search uses Firebase anonymous authentication on `/search`. A 401 rechecks the mode and refreshes the token once. If verification is unavailable, or a refreshed token is still rejected with integrity disabled, search uses the APK's public `/names` route once. A 403 or 429 stops further attempts. Requests share a 30-second deadline; token acquisition gets at most 15 seconds.
 
 Search uses UTF-8 Base64 and string rotation, with JSON responses. No AES key or Firebase environment variable is required.
 
