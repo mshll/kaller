@@ -3,6 +3,7 @@ import { encodeSearchKeyword } from "@/lib/crypto"
 import { USER_AGENT } from "@/lib/config"
 import { getSearchToken } from "@/lib/directory-auth"
 import { getSearchConfig, getSearchIntegrity, parseSearchResults, UPSTREAM_TIMEOUT_MS } from "@/lib/menodag"
+import { BackupRateLimitError, searchConfiguredBackup } from "@/lib/search-backup"
 
 export const runtime = "nodejs"
 
@@ -18,8 +19,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid search type" }, { status: 400 })
   }
 
+  const signal = AbortSignal.timeout(30_000)
+  let backupAttempted = false
+  const backup = async () => {
+    if (backupAttempted || signal.aborted) return null
+    backupAttempted = true
+    try {
+      const results = await searchConfiguredBackup(term, type, signal)
+      if (results !== null) {
+        console.info("Directory search used configured encrypted backup")
+        return NextResponse.json(results)
+      }
+      return null
+    } catch (error) {
+      if (error instanceof BackupRateLimitError) {
+        return NextResponse.json({ error: "Backup lookup service is rate limited" }, { status: 429 })
+      }
+      console.warn("Configured directory backup unavailable", {
+        message: error instanceof Error ? error.message : "Unknown failure",
+      })
+      return null
+    }
+  }
+
   try {
-    const signal = AbortSignal.timeout(30_000)
     const config = await getSearchConfig(signal)
     let integrity = await getSearchIntegrity(config.base, signal)
     const search = async (path: "/search" | "/names", token?: string) => fetch(`${config.base}${path}`, {
@@ -77,6 +100,10 @@ export async function GET(request: NextRequest) {
         errorType: response.headers.get("x-amzn-ErrorType"),
         requestId: response.headers.get("x-amzn-RequestId"),
       })
+      if (response.status !== 429) {
+        const recovered = await backup()
+        if (recovered !== null) return recovered
+      }
       return NextResponse.json(
         { error: `Search service returned ${response.status}` },
         { status: response.status >= 400 ? response.status : 502 }
@@ -90,6 +117,8 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json(results)
   } catch (error) {
+    const recovered = await backup()
+    if (recovered !== null) return recovered
     const message = error instanceof Error ? error.message : "Search failed"
     return NextResponse.json({ error: message }, { status: 502 })
   }

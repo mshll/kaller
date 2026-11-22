@@ -4,9 +4,11 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 Search loads `configGoldNew.txt` from the `menodag-b32f3.appspot.com` Firebase Storage bucket. During network or server outages, it can reuse the last validated config in the current server instance.
 
-The upstream `/integrity-mode` selects the APK's search flow. When integrity is disabled, search uses Firebase anonymous authentication on `/search`. A 401 rechecks the mode and refreshes the token once. If verification is unavailable, or a refreshed token is still rejected with integrity disabled, search uses the APK's public `/names` route once. A 403 or 429 stops further attempts. Requests share a 30-second deadline; token acquisition gets at most 15 seconds.
+The upstream `/integrity-mode` selects the APK's search flow. When integrity is disabled, search uses Firebase anonymous authentication on `/search`. A 401 rechecks the mode and refreshes the token once. If verification is unavailable, or a refreshed token is still rejected with integrity disabled, search uses the APK's public `/names` route once. A 403 stops further attempts against that provider. A 429 stops all attempts. Requests share a 30-second deadline; token acquisition gets at most 15 seconds.
 
 Search uses UTF-8 Base64 and string rotation, with JSON responses. No AES key or Firebase environment variable is required.
+
+If the primary connection fails, existing server-side `AES_KEY` and `FIREBASE_URL` values enable Kaller's previous encrypted API as a separate backup. It is attempted once. Phone-search rows may mask the supplied number as `1234XXXX`; Kaller associates those rows with the number the user already entered only when the prefix matches. Masked numbers from name searches are never filled in.
 
 The existing UI receives only name/phone records; upstream service messages and ads are excluded. Verification and blocking still use the legacy `FIREBASE_URL` configuration.
 

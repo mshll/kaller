@@ -1,8 +1,13 @@
 import { after, afterEach, test } from "node:test"
 import assert from "node:assert/strict"
 import { NextRequest } from "next/server"
+import CryptoJS from "crypto-js"
 
 const originalFetch = globalThis.fetch
+const originalAESKey = process.env.AES_KEY
+const originalFirebaseURL = process.env.FIREBASE_URL
+delete process.env.AES_KEY
+delete process.env.FIREBASE_URL
 const unexpectedFetch: typeof fetch = async () => { throw new Error("Unexpected network request in test") }
 let testFetch = unexpectedFetch
 // Firebase's Node SDK captures fetch at import; keep its requests inside the test dispatcher.
@@ -12,15 +17,22 @@ const { GET: getConfig } = await import("../config/route")
 const { getApp } = await import("firebase/app")
 const { getAuth, onIdTokenChanged, signOut } = await import("firebase/auth")
 const { getSearchToken } = await import("@/lib/directory-auth")
+const { searchConfiguredBackup } = await import("@/lib/search-backup")
 const base = "https://example.execute-api.ca-central-1.amazonaws.com/stage"
 
 after(() => {
   globalThis.fetch = originalFetch
+  if (originalAESKey === undefined) delete process.env.AES_KEY
+  else process.env.AES_KEY = originalAESKey
+  if (originalFirebaseURL === undefined) delete process.env.FIREBASE_URL
+  else process.env.FIREBASE_URL = originalFirebaseURL
 })
 
 afterEach(async () => {
   await signOut(getAuth(getApp("menodag-search")))
   testFetch = unexpectedFetch
+  delete process.env.AES_KEY
+  delete process.env.FIREBASE_URL
 })
 
 const authResponse = {
@@ -317,6 +329,122 @@ test("config access denial does not use cached configuration", async () => {
   testFetch = async () => Response.json({ error: "Forbidden" }, { status: 403 })
   const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
   assert.equal(response.status, 502)
+})
+
+test("an independently configured encrypted backup serves a rejected primary", async () => {
+  process.env.AES_KEY = "0123456789abcdef"
+  process.env.FIREBASE_URL = "https://backup-config.test"
+  let backupCalls = 0
+  testFetch = async (input, init) => {
+    const url = new URL(String(input))
+    if (url.hostname === "backup-config.test") return Response.json({ base: "https://backup-api.test/v1/" })
+    if (url.hostname === "backup-api.test") {
+      backupCalls++
+      assert.equal(init?.redirect, "manual")
+      assert.equal(new Headers(init?.headers).get("Authorization"), null)
+      const code = url.searchParams.get("code")
+      assert.ok(code)
+      const key = CryptoJS.enc.Utf8.parse("0123456789abcdef")
+      const decoded = CryptoJS.AES.decrypt(code.replace(/-/g, "+").replace(/AaAaAa/g, "="), key, {
+        mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7,
+      }).toString(CryptoJS.enc.Utf8)
+      assert.equal(decoded, "123term=00000000&234opt=1&234limit=100&234slt=123")
+      const encrypted = CryptoJS.AES.encrypt(JSON.stringify([
+        { name: "Test business", phone: "0000XXXX" },
+        { name: "Different prefix", phone: "1111XXXX" },
+      ]), key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }).toString()
+      return new Response(encrypted.replace(/\+/g, "-").replace(/=/g, "AaAaAa"))
+    }
+    if (url.pathname.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: true })
+    if (url.pathname.endsWith("/names")) return Response.json({ message: "Forbidden" }, { status: 403 })
+    return Response.json({ base })
+  }
+  const response = await GET(new NextRequest("https://kaller.test/api/search?term=00000000&type=phone"))
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), [{ name: "Test business", phone: "00000000" }])
+  assert.equal(backupCalls, 1)
+})
+
+test("encrypted name searches never fill in masked phone numbers", async () => {
+  process.env.AES_KEY = "0123456789abcdef"
+  process.env.FIREBASE_URL = "https://backup-config.test"
+  testFetch = async (input) => {
+    if (String(input).startsWith("https://backup-config.test/")) return Response.json({ base: "https://backup-api.test/v1" })
+    const key = CryptoJS.enc.Utf8.parse("0123456789abcdef")
+    const code = new URL(String(input)).searchParams.get("code")
+    assert.ok(code)
+    const decoded = CryptoJS.AES.decrypt(code.replace(/-/g, "+").replace(/AaAaAa/g, "="), key, {
+      mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7,
+    }).toString(CryptoJS.enc.Utf8)
+    assert.equal(decoded, "123term=Test business&234opt=2&234limit=100&234slt=123")
+    return new Response(CryptoJS.AES.encrypt(JSON.stringify([
+      { name: "Test masked", phone: "0000XXXX" },
+      { name: "Test full", phone: "00000000" },
+    ]), key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }).toString())
+  }
+  const results = await searchConfiguredBackup("Test business", "name", AbortSignal.timeout(1000))
+  assert.deepEqual(results, [{ name: "Test full", phone: "00000000" }])
+})
+
+test("encrypted backup rejects query parameter separators", async () => {
+  process.env.AES_KEY = "0123456789abcdef"
+  process.env.FIREBASE_URL = "https://backup-config.test"
+  await assert.rejects(searchConfiguredBackup("Test&234opt=0", "name", AbortSignal.timeout(1000)), /unsupported separator/)
+})
+
+test("backup rate limits are preserved instead of becoming primary access errors", async () => {
+  process.env.AES_KEY = "0123456789abcdef"
+  process.env.FIREBASE_URL = "https://backup-config.test"
+  for (const stage of ["config", "search"]) {
+    let backupCalls = 0
+    testFetch = async (input) => {
+      const url = new URL(String(input))
+      if (url.hostname === "backup-config.test") {
+        return stage === "config" ? new Response(null, { status: 429 }) : Response.json({ base: "https://backup-api.test/v1" })
+      }
+      if (url.hostname === "backup-api.test") {
+        backupCalls++
+        return new Response(null, { status: 429 })
+      }
+      if (url.pathname.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: true })
+      if (url.pathname.endsWith("/names")) return new Response(null, { status: 403 })
+      return Response.json({ base })
+    }
+    const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+    assert.equal(response.status, 429)
+    assert.equal(backupCalls, stage === "search" ? 1 : 0)
+  }
+})
+
+test("configured backup is not used on primary success or rate limiting", async () => {
+  process.env.AES_KEY = "0123456789abcdef"
+  process.env.FIREBASE_URL = "https://backup-config.test"
+  for (const status of [200, 429]) {
+    const calls = mockUpstream({ results: [] }, status)
+    const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+    assert.equal(response.status, status)
+    assert.equal(calls.length, 2)
+  }
+})
+
+test("an invalid encrypted backup response is not an empty successful lookup", async () => {
+  process.env.AES_KEY = "0123456789abcdef"
+  process.env.FIREBASE_URL = "https://backup-config.test"
+  let backupCalls = 0
+  testFetch = async (input) => {
+    const url = new URL(String(input))
+    if (url.hostname === "backup-config.test") return Response.json({ base: "https://backup-api.test/v1" })
+    if (url.hostname === "backup-api.test") {
+      backupCalls++
+      return new Response("invalid ciphertext")
+    }
+    if (url.pathname.endsWith("/integrity-mode")) return Response.json({ schemaVersion: 1, integrityEnabled: true })
+    if (url.pathname.endsWith("/names")) return Response.json({ message: "Forbidden" }, { status: 403 })
+    return Response.json({ base })
+  }
+  const response = await GET(new NextRequest("https://kaller.test/api/search?term=test&type=name"))
+  assert.equal(response.status, 403)
+  assert.equal(backupCalls, 1)
 })
 
 test("missing terms and unknown search types fail before fetching", async () => {
